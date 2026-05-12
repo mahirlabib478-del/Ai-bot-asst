@@ -5,8 +5,8 @@ import telebot
 from telebot import types
 
 # --- CONFIGURATION ---
-TOKEN = "YOUR_BOT_TOKEN_HERE" # এখানে আপনার বটের টোকেন দিন
-ADMIN_ID = 123456789          # এখানে আপনার টেলিগ্রাম আইডি দিন
+TOKEN = "8786283279:AAHvKKt4pnL_JXMvru4TRwDn-1cGxWBqv2g" # এখানে আপনার বটের টোকেন দিন
+ADMIN_ID = 8538304896          # এখানে আপনার টেলিগ্রাম আইডি দিন
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
