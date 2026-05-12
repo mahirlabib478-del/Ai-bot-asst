@@ -4,17 +4,16 @@ from flask import Flask
 import telebot
 from telebot import types
 
-# --- CONFIG ---
 TOKEN = "8786283279:AAHvKKt4pnL_JXMvru4TRwDn-1cGxWBqv2g"
-ADMIN_ID = 8538304896  # Replace with your actual Telegram ID
+ADMIN_ID = 8538304896 
+deposit_number = "01339871504" # ডিফল্ট নম্বর
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# --- IN-MEMORY STORAGE ---
-items = {}            # {"ItemName": {"price": 100, "stock": 5, "text": "Content"}}
-user_balances = {}    # {user_id: balance}
-deposit_requests = {} # {user_id: {"step": 1, "bkash": "", "trx": "", "amount": 0}}
+items = {}
+user_balances = {}
+deposit_requests = {} # {uid: {"amount": 0, "sender_number": "", "trx": ""}}
 
 # --- FLASK (Keep-Alive) ---
 @app.route('/')
@@ -23,104 +22,96 @@ def home(): return "Bot is running!"
 def run_flask():
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
-# --- ADMIN: ADD ITEM ---
+# --- ADMIN COMMANDS ---
+@bot.message_handler(commands=['setnumber'])
+def set_number(message):
+    if message.chat.id != ADMIN_ID: return
+    global deposit_number
+    try:
+        deposit_number = message.text.split()[1]
+        bot.reply_to(message, f"✅ নতুন bKash নম্বর সেট করা হয়েছে: {deposit_number}")
+    except:
+        bot.reply_to(message, "⚠️ ব্যবহার: /setnumber 01xxxxxxxxx")
+
 @bot.message_handler(commands=['additem'])
 def add_item(message):
     if message.chat.id != ADMIN_ID: return
     try:
-        # Format: /additem Name|Price|Stock|Content
         parts = message.text.replace("/additem ", "").split("|")
-        name, price, stock, content = parts[0], int(parts[1]), int(parts[2]), parts[3]
-        items[name] = {"price": price, "stock": stock, "text": content}
-        bot.reply_to(message, f"✅ Added '{name}'. Stock: {stock}")
+        items[parts[0]] = {"price": int(parts[1]), "stock": int(parts[2]), "text": parts[3]}
+        bot.reply_to(message, "✅ আইটেম যোগ হয়েছে।")
     except:
-        bot.reply_to(message, "⚠️ Format: /additem Name|Price|Stock|Content")
+        bot.reply_to(message, "⚠️ ফরম্যাট: /additem Name|Price|Stock|Content")
 
-# --- DEPOSIT SYSTEM ---
-@bot.message_handler(commands=['deposit'])
-def start_deposit(message):
-    deposit_requests[message.chat.id] = {"step": 1}
-    bot.send_message(message.chat.id, "Please enter your bKash number:")
+# --- DEPOSIT FLOW ---
+@bot.message_handler(func=lambda m: m.text == "Deposit")
+def ask_amount(message):
+    msg = bot.send_message(message.chat.id, "আপনি কত টাকা ডিপোজিট করতে চান?")
+    bot.register_next_step_handler(msg, process_amount)
 
-@bot.message_handler(func=lambda m: m.chat.id in deposit_requests)
-def handle_deposit_steps(message):
+def process_amount(message):
+    if not message.text.isdigit():
+        bot.reply_to(message, "দয়া করে সঠিক সংখ্যা লিখুন।")
+        return
+    
     uid = message.chat.id
-    step = deposit_requests[uid].get("step")
+    deposit_requests[uid] = {"amount": message.text}
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("Done", callback_data="deposit_done"))
+    
+    bot.send_message(uid, f"আমাদের bKash নম্বর: {deposit_number}\nএই নম্বরে টাকা পাঠান। টাকা পাঠানো হলে নিচের বাটনে ক্লিক করুন।", reply_markup=markup)
 
-    if step == 1:
-        deposit_requests[uid]["bkash"] = message.text
-        deposit_requests[uid]["step"] = 2
-        bot.send_message(uid, "Great! Now enter your Transaction ID:")
-    elif step == 2:
-        deposit_requests[uid]["trx"] = message.text
-        deposit_requests[uid]["step"] = 3
-        bot.send_message(uid, "Enter the amount to add:")
-    elif step == 3:
-        try:
-            amount = int(message.text)
-            bkash = deposit_requests[uid]["bkash"]
-            trx = deposit_requests[uid]["trx"]
-            
-            markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("Approve", callback_data=f"approve_{uid}_{amount}"))
-            
-            bot.send_message(ADMIN_ID, f"🔔 New Deposit Request!\nUser: {uid}\nBkash: {bkash}\nTrxID: {trx}\nAmount: {amount} BDT", reply_markup=markup)
-            bot.send_message(uid, "✅ Request submitted to admin. Please wait.")
-            del deposit_requests[uid]
-        except:
-            bot.send_message(uid, "❌ Invalid amount. Please enter a number.")
+@bot.callback_query_handler(func=lambda call: call.data == "deposit_done")
+def ask_sender_number(call):
+    msg = bot.send_message(call.message.chat.id, "আপনি কোন নম্বর থেকে টাকা পাঠিয়েছেন?")
+    bot.register_next_step_handler(msg, ask_trx_id)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("approve_"))
-def approve_deposit(call):
+def ask_trx_id(message):
+    uid = message.chat.id
+    deposit_requests[uid]["sender_number"] = message.text
+    msg = bot.send_message(uid, "এখন আপনার Transaction ID টি দিন:")
+    bot.register_next_step_handler(msg, finalize_deposit)
+
+def finalize_deposit(message):
+    uid = message.chat.id
+    deposit_requests[uid]["trx"] = message.text
+    req = deposit_requests[uid]
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("Approve", callback_data=f"app_{uid}"),
+               types.InlineKeyboardButton("Deny", callback_data=f"deny_{uid}"))
+    
+    user = message.from_user
+    username = f"@{user.username}" if user.username else "No Username"
+    
+    bot.send_message(ADMIN_ID, f"🔔 নতুন ডিপোজিট রিকোয়েস্ট!\nইউজার: {username} (ID: {uid})\nনম্বর: {req['sender_number']}\nTrxID: {req['trx']}\nপরিমাণ: {req['amount']} BDT", reply_markup=markup)
+    bot.reply_to(message, "✅ আপনার রিকোয়েস্ট অ্যাডমিনের কাছে পাঠানো হয়েছে।")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith(("app_", "deny_")))
+def handle_admin_decision(call):
     if call.message.chat.id != ADMIN_ID: return
-    _, uid, amount = call.data.split("_")
+    action, uid = call.data.split("_")
     uid = int(uid)
-    user_balances[uid] = user_balances.get(uid, 0) + int(amount)
-    bot.send_message(uid, f"✅ Your deposit of {amount} BDT has been approved!")
-    bot.edit_message_text("✅ Approved.", call.message.chat.id, call.message.message_id)
+    
+    if action == "app":
+        amount = int(deposit_requests[uid]['amount'])
+        user_balances[uid] = user_balances.get(uid, 0) + amount
+        bot.send_message(uid, "✅ আপনার ডিপোজিট এপ্রুভ হয়েছে!")
+        bot.edit_message_text("✅ Approved", call.message.chat.id, call.message.message_id)
+    else:
+        bot.send_message(uid, "❌ দুঃখিত, আপনার ডিপোজিট রিকোয়েস্টটি বাতিল করা হয়েছে।")
+        bot.edit_message_text("❌ Denied", call.message.chat.id, call.message.message_id)
+    
+    if uid in deposit_requests: del deposit_requests[uid]
 
-# --- SHOP & BALANCE ---
+# --- STARTER ---
 @bot.message_handler(commands=['start'])
 def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("Shop", "Balance")
-    bot.send_message(message.chat.id, "Welcome to our shop!", reply_markup=markup)
+    markup.add("Shop", "Balance", "Deposit")
+    bot.send_message(message.chat.id, "স্বাগতম!", reply_markup=markup)
 
-@bot.message_handler(func=lambda m: m.text == "Balance")
-def check_balance(message):
-    bal = user_balances.get(message.chat.id, 0)
-    bot.send_message(message.chat.id, f"💰 Your Balance: {bal} BDT\n\nUse /deposit to add funds.")
-
-@bot.message_handler(func=lambda m: m.text == "Shop")
-def shop(message):
-    if not items:
-        bot.send_message(message.chat.id, "❌ No items available.")
-        return
-    markup = types.InlineKeyboardMarkup()
-    for name, item in items.items():
-        markup.add(types.InlineKeyboardButton(f"{name} ({item['price']} BDT) - Stock: {item['stock']}", callback_data=f"buy_{name}"))
-    bot.send_message(message.chat.id, "Available items:", reply_markup=markup)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("buy_"))
-def buy_item(call):
-    name = call.data.split("_", 1)[1]
-    item = items[name]
-    uid = call.message.chat.id
-    
-    if item['stock'] <= 0:
-        bot.send_message(uid, "❌ Item out of stock!")
-        return
-    
-    if user_balances.get(uid, 0) < item['price']:
-        bot.send_message(uid, "❌ Insufficient balance.")
-        return
-    
-    # Successful Purchase
-    user_balances[uid] -= item['price']
-    item['stock'] -= 1
-    bot.send_message(uid, f"✅ Purchase Successful!\n\nItem: {name}\n\nContent:\n{item['text']}")
-
-# --- EXECUTION ---
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     bot.infinity_polling()
