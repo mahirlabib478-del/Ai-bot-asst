@@ -4,28 +4,28 @@ from flask import Flask
 import telebot
 from telebot import types
 
---- CONFIGURATION ---
+# --- CONFIGURATION ---
 TOKEN = "8786283279:AAHvKKt4pnL_JXMvru4TRwDn-1cGxWBqv2g"
 ADMIN_ID = 8538304896
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
---- DATA STORAGE ---
+# --- DATA STORAGE ---
 items = {} # {name: {"price": p, "stock": s, "f_id": id, "type": t, "text": txt}}
-sellable_types = {} # {name: {"price": p}} (স্টক রিমুভ করা হয়েছে)
+sellable_types = {} # {name: {"price": p}}
 user_balances = {}
 deposit_requests = {}
 pending_sells = {}
 deposit_number = "01339871504"
 
---- FLASK (Keep-Alive) ---
+# --- FLASK (Keep-Alive) ---
 @app.route('/')
 def home(): return "Bot is running!"
 
 def run_flask(): app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
---- ADMIN COMMANDS: BKASH CHANGE ---
+# --- ADMIN COMMANDS: BKASH CHANGE ---
 @bot.message_handler(commands=['setbkash'])
 def set_bkash(message):
     if message.chat.id != ADMIN_ID: return
@@ -37,13 +37,12 @@ def set_bkash(message):
     except:
         bot.reply_to(message, "⚠️ ফরম্যাট: /setbkash 01xxxxxxxxx")
 
---- ADMIN COMMANDS: ADD ---
+# --- ADMIN COMMANDS: ADD ---
 @bot.message_handler(commands=['addsellable'])
 def add_sellable(message):
     if message.chat.id != ADMIN_ID: return
     try:
         data = message.text.replace("/addsellable ", "").split("|")
-        # স্টক ছাড়া শুধু নাম এবং প্রাইস
         sellable_types[data[0]] = {"price": int(data[1])}
         bot.reply_to(message, f"✅ '{data[0]}' সেলে যোগ হয়েছে। দাম: {data[1]} BDT")
     except:
@@ -81,7 +80,7 @@ def set_stock_admin(message):
     except:
         bot.reply_to(message, "⚠️ ফরম্যাট: /setstock Name|NewStock")
 
---- ADMIN COMMANDS: REMOVE ---
+# --- ADMIN COMMANDS: REMOVE ---
 @bot.message_handler(commands=['remove'])
 def remove_menu(message):
     if message.chat.id != ADMIN_ID: return
@@ -100,12 +99,13 @@ def handle_remove(call):
             markup.add(types.InlineKeyboardButton(f"Remove {n}", callback_data=f"del{mode}{n}"))
         bot.edit_message_text(f"{mode} থেকে কোনটি ডিলিট করবেন?", call.message.chat.id, call.message.message_id, reply_markup=markup)
     elif call.data.startswith("del"):
-        mode, name = call.data[3:7], call.data[7:]
+        mode = call.data[3:7]
+        name = call.data[7:]
         if mode == "shop" and name in items: del items[name]
         elif mode == "sell" and name in sellable_types: del sellable_types[name]
         bot.edit_message_text(f"✅ '{name}' মুছে ফেলা হয়েছে।", call.message.chat.id, call.message.message_id)
 
---- BUY & SELL FLOW ---
+# --- BUY & SELL FLOW ---
 @bot.message_handler(func=lambda m: m.text == "Shop")
 def shop(message):
     if not items: bot.send_message(message.chat.id, "❌ শপ বর্তমানে খালি।"); return
@@ -167,7 +167,7 @@ def save_sell(message):
     user_balances[uid] = user_balances.get(uid, 0) + (sellable_types[name]['price'] * qty)
     bot.reply_to(message, f"✅ {qty} পিস সেল সফল! শপে যোগ হয়েছে।")
 
---- DEPOSIT & START ---
+# --- DEPOSIT & START ---
 @bot.message_handler(commands=['start'])
 def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True); markup.add("Shop", "Sell", "Balance", "Deposit")
