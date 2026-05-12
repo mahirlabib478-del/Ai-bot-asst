@@ -1,23 +1,32 @@
 import os
-import time
 import threading
+import json
 from flask import Flask
 import telebot
 from telebot import types
 
-# CONFIG
-TOKEN = "8786283279:AAHvKKt4pnL_JXMvru4TRwDn-1cGxWBqv2g"
-ADMIN_ID = 8538304896 
+# --- CONFIGURATION ---
+TOKEN = "YOUR_BOT_TOKEN_HERE"
+ADMIN_ID = 123456789 
+DATA_FILE = "shop_data.json"
 
 bot = telebot.TeleBot(TOKEN)
-app = Flask(__name__) # MISSING: Flask app initialization
+app = Flask(__name__)
 
-# Data Storage (In-memory)
-items =[]  
-user_balances = {} 
+# --- DATA MANAGEMENT ---
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {"items": {}, "balances": {}, "pending_deposits": {}}
+    with open(DATA_FILE, 'r') as f:
+        return json.load(f)
 
-# --- FLASK ROUTE ---
-# MISSING: This route is required to keep the bot alive on cloud platforms
+def save_data(data):
+    with open(DATA_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+data = load_data()
+
+# --- FLASK (To keep the bot alive) ---
 @app.route('/')
 def home():
     return "Bot is running!"
@@ -25,73 +34,89 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
-# --- ADMIN COMMANDS ---
+# --- ADMIN: ADD STOCK ---
 @bot.message_handler(commands=['additem'])
 def add_item(message):
     if message.chat.id != ADMIN_ID: return
     try:
-        data = message.text.replace("/additem ", "").split("|")
-        items.append({"name": data[0], "price": int(data[1]), "text": data[2]})
-        bot.reply_to(message, "✅ Item added successfully!")
+        # Format: /additem Name|Price|Stock|Content
+        parts = message.text.replace("/additem ", "").split("|")
+        name, price, stock, content = parts[0], int(parts[1]), int(parts[2]), parts[3]
+        data['items'][name] = {"price": price, "stock": stock, "text": content}
+        save_data(data)
+        bot.reply_to(message, f"✅ '{name}' added/updated. Stock: {stock}")
     except:
-        bot.reply_to(message, "⚠️ Format: /additem Name|Price|Content")
+        bot.reply_to(message, "⚠️ Format: /additem Name|Price|Stock|Content")
 
-@bot.message_handler(commands=['approve'])
-def approve_balance(message):
-    if message.chat.id != ADMIN_ID: return
+# --- USER: DEPOSIT REQUEST ---
+@bot.message_handler(commands=['deposit'])
+def request_deposit(message):
     try:
-        _, user_id, amount = message.text.split()
-        user_id = int(user_id)
-        user_balances[user_id] = user_balances.get(user_id, 0) + int(amount)
-        bot.send_message(user_id, f"✅ Balance added: {amount} BDT")
-        bot.reply_to(message, "✅ Done.")
+        amount = int(message.text.split()[1])
+        req_id = f"{message.chat.id}_{len(data['pending_deposits'])}"
+        data['pending_deposits'][req_id] = {"user_id": message.chat.id, "amount": amount}
+        save_data(data)
+        
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("Approve", callback_data=f"approve_{req_id}"))
+        bot.send_message(ADMIN_ID, f"🔔 New Deposit: {amount} BDT from {message.chat.id}", reply_markup=markup)
+        bot.reply_to(message, "✅ Request sent to admin.")
     except:
-        bot.reply_to(message, "⚠️ Format: /approve UserID Amount")
+        bot.reply_to(message, "⚠️ Format: /deposit [Amount]")
 
-# --- USER COMMANDS ---
+# --- ADMIN: APPROVE DEPOSIT ---
+@bot.callback_query_handler(func=lambda call: call.data.startswith("approve_"))
+def approve_deposit(call):
+    if call.message.chat.id != ADMIN_ID: return
+    req_id = call.data.split("_", 1)[1]
+    if req_id in data['pending_deposits']:
+        req = data['pending_deposits'][req_id]
+        uid = str(req['user_id'])
+        data['balances'][uid] = data['balances'].get(uid, 0) + req['amount']
+        del data['pending_deposits'][req_id]
+        save_data(data)
+        bot.send_message(uid, f"✅ Your deposit of {req['amount']} BDT was approved!")
+        bot.edit_message_text("✅ Approved.", call.message.chat.id, call.message.message_id)
+
+# --- SHOP & PURCHASING ---
 @bot.message_handler(commands=['start'])
 def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Shop", "Balance")
-    bot.send_message(message.chat.id, "Welcome to the Shop!", reply_markup=markup)
+    bot.send_message(message.chat.id, "Welcome!", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.text == "Balance")
 def check_balance(message):
-    bal = user_balances.get(message.chat.id, 0)
-    bot.send_message(message.chat.id, f"💰 Your Balance: {bal} BDT\n\nTo add balance, send money via Bkash and contact Admin.")
+    bal = data['balances'].get(str(message.chat.id), 0)
+    bot.send_message(message.chat.id, f"💰 Balance: {bal} BDT")
 
 @bot.message_handler(func=lambda m: m.text == "Shop")
 def shop(message):
-    if not items:
-        bot.send_message(message.chat.id, "❌ No items currently available.")
-        return
     markup = types.InlineKeyboardMarkup()
-    for i, item in enumerate(items):
-        markup.add(types.InlineKeyboardButton(f"{item['name']} ({item['price']} BDT)", callback_data=f"buy_{i}"))
-    bot.send_message(message.chat.id, "Select an item to buy:", reply_markup=markup)
+    for name, item in data['items'].items():
+        markup.add(types.InlineKeyboardButton(f"{name} ({item['price']} BDT) | Stock: {item['stock']}", callback_data=f"buy_{name}"))
+    bot.send_message(message.chat.id, "Available Items:", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("buy_"))
 def buy_item(call):
-    idx = int(call.data.split("_")[1])
-    item = items[idx]
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("Confirm Purchase", callback_data=f"confirm_{idx}"))
-    bot.send_message(call.message.chat.id, f"Buy '{item['name']}' for {item['price']} BDT?", reply_markup=markup)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_"))
-def confirm_purchase(call):
-    idx = int(call.data.split("_")[1])
-    item = items[idx]
-    uid = call.message.chat.id
+    name = call.data.split("_", 1)[1]
+    item = data['items'][name]
+    uid = str(call.message.chat.id)
     
-    if user_balances.get(uid, 0) >= item['price']:
-        user_balances[uid] -= item['price']
+    if item['stock'] <= 0:
+        bot.answer_callback_query(call.id, "❌ Out of stock!")
+        return
+    
+    if data['balances'].get(uid, 0) >= item['price']:
+        data['balances'][uid] -= item['price']
+        item['stock'] -= 1
+        save_data(data)
         bot.send_message(uid, f"✅ Purchase Successful!\n\nContent: {item['text']}")
     else:
-        bot.send_message(uid, "❌ Insufficient balance!")
+        bot.answer_callback_query(call.id, "❌ Insufficient balance!")
 
-# --- MAIN EXECUTION ---
+# --- EXECUTION ---
 if __name__ == "__main__":
-    # MISSING: Run flask in a thread so it doesn't block the bot polling
+    # Start Flask in a separate thread so it doesn't block the bot
     threading.Thread(target=run_flask).start()
     bot.infinity_polling()
