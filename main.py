@@ -6,8 +6,8 @@ import telebot
 from telebot import types
 
 # --- CONFIGURATION ---
-TOKEN = "YOUR_BOT_TOKEN_HERE"
-ADMIN_ID = 123456789 
+TOKEN = "8786283279:AAHvKKt4pnL_JXMvru4TRwDn-1cGxWBqv2g"
+ADMIN_ID = 8538304896 
 DATA_FILE = "shop_data.json"
 
 bot = telebot.TeleBot(TOKEN)
