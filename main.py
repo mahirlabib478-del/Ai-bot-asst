@@ -6,8 +6,8 @@ import telebot
 from telebot import types
 
 # CONFIG
-TOKEN = "YOUR_BOT_TOKEN_HERE"
-ADMIN_ID = 123456789 
+TOKEN = "8786283279:AAHvKKt4pnL_JXMvru4TRwDn-1cGxWBqv2g"
+ADMIN_ID = 8538304896 
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__) # MISSING: Flask app initialization
