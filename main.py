@@ -155,17 +155,49 @@ def get_quantity(message):
         bot.register_next_step_handler(msg, save_sell)
     except: bot.reply_to(message, "❌ শুধুমাত্র সংখ্যা লিখুন।")
 
+# --- UPDATED SAVE SELL ---
 def save_sell(message):
     uid = message.chat.id
+    username = message.from_user.username or "NoUsername"
     data = pending_sells[uid]
     name = data["name"]
     qty = data["qty"]
+    
     f_id = message.photo[-1].file_id if message.photo else message.video.file_id if message.video else message.document.file_id if message.document else None
     f_type = 'photo' if message.photo else 'video' if message.video else 'document' if message.document else 'text'
     text = message.caption or message.text or "No content"
-    items[f"{name}_{uid}"] = {"price": sellable_types[name]['price'], "stock": qty, "f_id": f_id, "type": f_type, "text": text}
-    user_balances[uid] = user_balances.get(uid, 0) + (sellable_types[name]['price'] * qty)
-    bot.reply_to(message, f"✅ {qty} পিস সেল সফল! শপে যোগ হয়েছে।")
+    
+    pending_sells[uid].update({"f_id": f_id, "type": f_type, "text": text, "username": username})
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("Approve", callback_data=f"appsell_{uid}"),
+        types.InlineKeyboardButton("Deny", callback_data=f"denysell_{uid}")
+    )
+    
+    msg_text = (f"🔔 নতুন সেল রিকোয়েস্ট!\n\nUser: @{username}\nID: {uid}\nItem: {name}\nQty: {qty}")
+    bot.send_message(ADMIN_ID, msg_text, reply_markup=markup)
+    bot.reply_to(message, "✅ আপনার সেল রিকোয়েস্টটি অ্যাডমিনের কাছে পাঠানো হয়েছে।")
+
+# --- SELL APPROVAL HANDLER ---
+@bot.callback_query_handler(func=lambda call: call.data.startswith(("appsell_", "denysell_")))
+def handle_sell_approval(call):
+    if call.from_user.id != ADMIN_ID: return
+    action, uid = call.data.split("_")
+    uid = int(uid)
+    if action == "appsell":
+        data = pending_sells[uid]
+        name = data["name"]
+        qty = data["qty"]
+        price = sellable_types[name]['price']
+        items[f"{name}_{uid}"] = {"price": price, "stock": qty, "f_id": data["f_id"], "type": data["type"], "text": data["text"]}
+        user_balances[uid] = user_balances.get(uid, 0) + (price * qty)
+        bot.send_message(uid, f"✅ আপনার সেল রিকোয়েস্ট এপ্রুভ হয়েছে!")
+        bot.edit_message_text(f"✅ এপ্রুভড! ইউজার: @{data['username']}", call.message.chat.id, call.message.message_id)
+    else:
+        bot.send_message(uid, "❌ আপনার সেল রিকোয়েস্টটি রিজেক্ট করা হয়েছে।")
+        bot.edit_message_text(f"❌ ডেনিড! ইউজার: @{pending_sells[uid]['username']}", call.message.chat.id, call.message.message_id)
+    if uid in pending_sells: del pending_sells[uid]
 
 # --- DEPOSIT & START ---
 @bot.message_handler(commands=['start'])
