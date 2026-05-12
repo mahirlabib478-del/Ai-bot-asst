@@ -5,21 +5,21 @@ import telebot
 from telebot import types
 
 # --- CONFIGURATION ---
-TOKEN = "8786283279:AAHvKKt4pnL_JXMvru4TRwDn-1cGxWBqv2g" # এখানে আপনার বটের টোকেন দিন
-ADMIN_ID = 8538304896          # এখানে আপনার টেলিগ্রাম আইডি দিন
+TOKEN = "YOUR_BOT_TOKEN_HERE"
+ADMIN_ID = 123456789 
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
 # --- STORAGE ---
-items = {}            
-sellable_types = {}   
+items = {}            # কেনার আইটেম
+sellable_types = {}   # বিক্রয়যোগ্য আইটেম
 user_balances = {}    
 deposit_requests = {} 
 user_sell_requests = {} 
 deposit_number = "01339871504" 
 
-# --- FLASK (Keep-Alive) ---
+# --- FLASK ---
 @app.route('/')
 def home(): return "Bot is running!"
 
@@ -58,7 +58,7 @@ def save_item_p1(message):
         data = message.text.split("|")
         bot.send_message(message.chat.id, "এখন ফাইলটি পাঠান:")
         bot.register_next_step_handler(message, lambda m: save_item_p2(m, data[0], data[1], data[2]))
-    except: bot.reply_to(message, "ভুল ফরম্যাট! Name|Price|Stock দিন।")
+    except: bot.reply_to(message, "ভুল ফরম্যাট!")
 
 def save_item_p2(message, name, price, stock):
     f_id, f_type = (message.photo[-1].file_id, 'photo') if message.photo else (message.video.file_id, 'video') if message.video else (message.document.file_id, 'document') if message.document else (None, None)
@@ -79,7 +79,7 @@ def add_sellable(message):
 # --- DEPOSIT FLOW ---
 @bot.message_handler(func=lambda m: m.text == "Deposit")
 def ask_amount(message):
-    msg = bot.send_message(message.chat.id, "কত টাকা ডিপোজিট করবেন?", reply_markup=get_cancel_markup())
+    msg = bot.send_message(message.chat.id, "কত টাকা ডিপোজিট করবেন? (Cancel লিখলে বাতিল হবে)", reply_markup=get_cancel_markup())
     bot.register_next_step_handler(msg, process_amount)
 
 def process_amount(message):
@@ -90,16 +90,17 @@ def process_amount(message):
 
 @bot.callback_query_handler(func=lambda call: call.data == "deposit_done")
 def ask_trx(call):
-    msg = bot.send_message(call.from_user.id, "ট্রানজেকশন আইডি দিন:")
+    msg = bot.send_message(call.from_user.id, "ট্রানজেকশন আইডি দিন (অথবা Cancel লিখুন):", reply_markup=get_cancel_markup())
     bot.register_next_step_handler(msg, finalize_deposit)
 
 def finalize_deposit(message):
+    if message.text == "Cancel": show_main_menu(message.chat.id); return
     uid = message.chat.id
     markup = types.InlineKeyboardMarkup(); markup.add(types.InlineKeyboardButton("Approve", callback_data=f"app_{uid}"), types.InlineKeyboardButton("Deny", callback_data=f"deny_{uid}"))
     bot.send_message(ADMIN_ID, f"🔔 ডিপোজিট রিকোয়েস্ট!\nইউজার: {message.from_user.username}\nপরিমাণ: {deposit_requests[uid]['amount']}\nTrx: {message.text}", reply_markup=markup)
     bot.reply_to(message, "✅ অ্যাডমিনের কাছে পাঠানো হয়েছে।"); show_main_menu(uid)
 
-# --- SELL FLOW ---
+# --- SELL & SHOP FLOW ---
 @bot.message_handler(func=lambda m: m.text == "Sell")
 def show_sell(message):
     if not sellable_types: bot.send_message(message.chat.id, "❌ কোনো আইটেম নেই।"); return
@@ -124,7 +125,6 @@ def finalize_sell(message):
     bot.send_forward_message(ADMIN_ID, uid, message.message_id)
     bot.reply_to(message, "✅ পাঠানো হয়েছে।"); show_main_menu(uid)
 
-# --- SHOP FLOW ---
 @bot.message_handler(func=lambda m: m.text == "Shop")
 def shop(message):
     if not items: bot.send_message(message.chat.id, "❌ কোনো আইটেম নেই।"); return
