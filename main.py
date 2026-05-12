@@ -4,7 +4,7 @@ from flask import Flask
 import telebot 
 from telebot import types
 
---- CONFIGURATION ---
+# --- CONFIGURATION ---
 
 TOKEN = "8786283279:AAHvKKt4pnL_JXMvru4TRwDn-1cGxWBqv2g" 
 ADMIN_ID = 8538304896
@@ -12,24 +12,24 @@ ADMIN_ID = 8538304896
 bot = telebot.TeleBot(TOKEN) 
 app = Flask(__name__)
 
---- DATA STORAGE ---
+# --- DATA STORAGE ---
 
 items = {} 
 sellable_types = {} 
 user_balances = {} 
 deposit_requests = {}
-withdraw_requests = {} # নতুন যোগ করা হয়েছে
+withdraw_requests = {} 
 pending_sells = {} 
 deposit_number = "01339871504"
 
---- FLASK (Keep-Alive) ---
+# --- FLASK (Keep-Alive) ---
 
 @app.route('/') 
 def home(): return "Bot is running!"
 
 def run_flask(): app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
---- ADMIN COMMANDS: BKASH CHANGE ---
+# --- ADMIN COMMANDS: BKASH CHANGE ---
 
 @bot.message_handler(commands=['setbkash']) 
 def set_bkash(message): 
@@ -42,7 +42,7 @@ def set_bkash(message):
     except: 
         bot.reply_to(message, "⚠️ ফরম্যাট: /setbkash 01xxxxxxxxx")
 
---- ADMIN COMMANDS: ADD ---
+# --- ADMIN COMMANDS: ADD ---
 
 @bot.message_handler(commands=['addsellable']) 
 def add_sellable(message): 
@@ -86,7 +86,7 @@ def set_stock_admin(message):
     except: 
         bot.reply_to(message, "⚠️ ফরম্যাট: /setstock Name|NewStock")
 
---- ADMIN COMMANDS: REMOVE (FIXED) ---
+# --- ADMIN COMMANDS: REMOVE (FIXED) ---
 
 @bot.message_handler(commands=['remove']) 
 def remove_menu(message): 
@@ -119,7 +119,7 @@ def handle_remove(call):
         else:
             bot.answer_callback_query(call.id, "❌ আইটেমটি পাওয়া যায়নি।")
 
---- BUY & SELL FLOW ---
+# --- BUY & SELL FLOW ---
 
 @bot.message_handler(func=lambda m: m.text == "Shop") 
 def shop(message): 
