@@ -12,8 +12,8 @@ bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
 # --- DATA STORAGE ---
-items = {} # {name: {"price": p, "stock": s, "f_id": id, "type": t, "text": txt}}
-sellable_types = {} # {name: {"price": p}}
+items = {} 
+sellable_types = {} 
 user_balances = {}
 deposit_requests = {}
 pending_sells = {}
@@ -63,8 +63,8 @@ def add_item_admin(message):
         text = msg.caption or msg.text or "No content"
         items[name] = {"price": price, "stock": stock, "f_id": f_id, "type": f_type, "text": text}
         bot.reply_to(message, f"✅ '{name}' {stock} স্টক সহ শপে যোগ হয়েছে।")
-    except:
-        bot.reply_to(message, "❌ ফরম্যাট ভুল! ব্যবহার করুন: /additem Name|Price|Stock")
+    except Exception as e:
+        bot.reply_to(message, f"❌ ফরম্যাট ভুল! ব্যবহার করুন: /additem Name|Price|Stock\nError: {e}")
 
 @bot.message_handler(commands=['setstock'])
 def set_stock_admin(message):
@@ -80,30 +80,44 @@ def set_stock_admin(message):
     except:
         bot.reply_to(message, "⚠️ ফরম্যাট: /setstock Name|NewStock")
 
-# --- ADMIN COMMANDS: REMOVE ---
+# --- ADMIN COMMANDS: REMOVE (FIXED) ---
 @bot.message_handler(commands=['remove'])
 def remove_menu(message):
     if message.chat.id != ADMIN_ID: return
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("Remove from Shop", callback_data="rem_shop"), types.InlineKeyboardButton("Remove from Sellable List", callback_data="rem_sell"))
+    markup.add(
+        types.InlineKeyboardButton("Remove from Shop", callback_data="rem_shop"), 
+        types.InlineKeyboardButton("Remove from Sellable List", callback_data="rem_sell")
+    )
     bot.send_message(message.chat.id, "কি রিমুভ করতে চান?", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("rem_") or call.data.startswith("del_"))
 def handle_remove(call):
     if call.from_user.id != ADMIN_ID: return
+    
     if call.data.startswith("rem_"):
         mode = call.data.split("_")[1]
         markup = types.InlineKeyboardMarkup()
         source = items if mode == "shop" else sellable_types
         for n in source.keys():
-            markup.add(types.InlineKeyboardButton(f"Remove {n}", callback_data=f"del{mode}{n}"))
+            # নিরাপদ বাটন তৈরি
+            btn = types.InlineKeyboardButton(f"Remove {n}", callback_data=f"del_{mode}_{n}")
+            markup.add(btn)
         bot.edit_message_text(f"{mode} থেকে কোনটি ডিলিট করবেন?", call.message.chat.id, call.message.message_id, reply_markup=markup)
-    elif call.data.startswith("del"):
-        mode = call.data[3:7]
-        name = call.data[7:]
-        if mode == "shop" and name in items: del items[name]
-        elif mode == "sell" and name in sellable_types: del sellable_types[name]
-        bot.edit_message_text(f"✅ '{name}' মুছে ফেলা হয়েছে।", call.message.chat.id, call.message.message_id)
+    
+    elif call.data.startswith("del_"):
+        parts = call.data.split("_")
+        mode = parts[1]
+        name = "_".join(parts[2:]) 
+        
+        if mode == "shop" and name in items: 
+            del items[name]
+            bot.edit_message_text(f"✅ Shop থেকে '{name}' মুছে ফেলা হয়েছে।", call.message.chat.id, call.message.message_id)
+        elif mode == "sell" and name in sellable_types: 
+            del sellable_types[name]
+            bot.edit_message_text(f"✅ Sellable থেকে '{name}' মুছে ফেলা হয়েছে।", call.message.chat.id, call.message.message_id)
+        else:
+            bot.answer_callback_query(call.id, "❌ আইটেমটি পাওয়া যায়নি।")
 
 # --- BUY & SELL FLOW ---
 @bot.message_handler(func=lambda m: m.text == "Shop")
@@ -112,20 +126,23 @@ def shop(message):
     markup = types.InlineKeyboardMarkup()
     for n, d in items.items():
         if d['stock'] > 0:
-            markup.add(types.InlineKeyboardButton(f"{n} ({d['price']} BDT) - Stock: {d['stock']}", callback_data=f"buy_{n}"))
+            markup.add(types.InlineKeyboardButton(f"{n} ({d['price']} BDT)", callback_data=f"buy_{n}"))
     bot.send_message(message.chat.id, "পণ্য কিনুন:", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("buy_"))
 def buy_item(call):
     name = call.data.split("_", 1)[1]
-    item = items[name]
+    item = items.get(name)
+    if not item: return
     uid = call.from_user.id
     if user_balances.get(uid, 0) < item['price']:
         bot.answer_callback_query(call.id, "❌ ব্যালেন্স কম!"); return
     if item['stock'] <= 0:
         bot.answer_callback_query(call.id, "❌ স্টক শেষ!"); return
+    
     user_balances[uid] -= item['price']
     item['stock'] -= 1
+    
     if item['type'] == 'photo': bot.send_photo(uid, item['f_id'], caption=f"✅ কেনা সম্পন্ন: {name}")
     elif item['type'] == 'video': bot.send_video(uid, item['f_id'], caption=f"✅ কেনা সম্পন্ন: {name}")
     elif item['type'] == 'document': bot.send_document(uid, item['f_id'], caption=f"✅ কেনা সম্পন্ন: {name}")
@@ -155,13 +172,10 @@ def get_quantity(message):
         bot.register_next_step_handler(msg, save_sell)
     except: bot.reply_to(message, "❌ শুধুমাত্র সংখ্যা লিখুন।")
 
-# --- UPDATED SAVE SELL ---
 def save_sell(message):
     uid = message.chat.id
     username = message.from_user.username or "NoUsername"
     data = pending_sells[uid]
-    name = data["name"]
-    qty = data["qty"]
     
     f_id = message.photo[-1].file_id if message.photo else message.video.file_id if message.video else message.document.file_id if message.document else None
     f_type = 'photo' if message.photo else 'video' if message.video else 'document' if message.document else 'text'
@@ -175,11 +189,10 @@ def save_sell(message):
         types.InlineKeyboardButton("Deny", callback_data=f"denysell_{uid}")
     )
     
-    msg_text = (f"🔔 নতুন সেল রিকোয়েস্ট!\n\nUser: @{username}\nID: {uid}\nItem: {name}\nQty: {qty}")
+    msg_text = (f"🔔 নতুন সেল রিকোয়েস্ট!\n\nUser: @{username}\nID: {uid}\nItem: {data['name']}\nQty: {data['qty']}")
     bot.send_message(ADMIN_ID, msg_text, reply_markup=markup)
     bot.reply_to(message, "✅ আপনার সেল রিকোয়েস্টটি অ্যাডমিনের কাছে পাঠানো হয়েছে।")
 
-# --- SELL APPROVAL HANDLER ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith(("appsell_", "denysell_")))
 def handle_sell_approval(call):
     if call.from_user.id != ADMIN_ID: return
@@ -196,10 +209,9 @@ def handle_sell_approval(call):
         bot.edit_message_text(f"✅ এপ্রুভড! ইউজার: @{data['username']}", call.message.chat.id, call.message.message_id)
     else:
         bot.send_message(uid, "❌ আপনার সেল রিকোয়েস্টটি রিজেক্ট করা হয়েছে।")
-        bot.edit_message_text(f"❌ ডেনিড! ইউজার: @{pending_sells[uid]['username']}", call.message.chat.id, call.message.message_id)
+        bot.edit_message_text(f"❌ ডেনিড! ইউজার: @{pending_sells.get(uid, {}).get('username', 'Unknown')}", call.message.chat.id, call.message.message_id)
     if uid in pending_sells: del pending_sells[uid]
 
-# --- DEPOSIT & START ---
 @bot.message_handler(commands=['start'])
 def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True); markup.add("Shop", "Sell", "Balance", "Deposit")
