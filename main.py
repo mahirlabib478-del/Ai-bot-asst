@@ -36,7 +36,27 @@ def add_sellable(message):
         bot.reply_to(message, f"✅ '{data[0]}' সেল করার উপযোগী করা হয়েছে। দাম: {data[1]} BDT")
     except: bot.reply_to(message, "⚠️ ফরম্যাট: /addsellable Name|Price")
 
-# --- নতুন রিমুভ সিস্টেম (এখানেই যোগ করা হয়েছে) ---
+# নতুন ফিচার: সরাসরি শপে পণ্য যোগ করা
+@bot.message_handler(commands=['additem'])
+def add_item_admin(message):
+    if message.chat.id != ADMIN_ID: return
+    if not message.reply_to_message:
+        bot.reply_to(message, "⚠️ ফাইল বা মেসেজ রিফ্লাই দিয়ে লিখুন: /additem Name|Price")
+        return
+    try:
+        data = message.text.replace("/additem ", "").split("|")
+        name, price = data[0], int(data[1])
+        msg = message.reply_to_message
+        
+        f_id = msg.photo[-1].file_id if msg.photo else msg.video.file_id if msg.video else msg.document.file_id if msg.document else None
+        f_type = 'photo' if msg.photo else 'video' if msg.video else 'document' if msg.document else 'text'
+        text = msg.caption or msg.text or "No content"
+        
+        items[name] = {"price": price, "f_id": f_id, "type": f_type, "text": text}
+        bot.reply_to(message, f"✅ '{name}' সরাসরি শপে যোগ করা হয়েছে।")
+    except: bot.reply_to(message, "❌ ফরম্যাট ভুল! ব্যবহার করুন: /additem Name|Price")
+
+# --- REMOVE SYSTEM ---
 @bot.message_handler(commands=['remove'])
 def remove_menu(message):
     if message.chat.id != ADMIN_ID: return
@@ -67,7 +87,7 @@ def confirm_remove(call):
     elif mode == "sell" and name in sellable_types: del sellable_types[name]
     bot.edit_message_text(f"✅ '{name}' রিমুভ করা হয়েছে।", call.message.chat.id, call.message.message_id)
 
-# --- (বাকি আগের কোডগুলো এখানে থাকবে) ---
+# --- DEPOSIT SYSTEM ---
 @bot.message_handler(func=lambda m: m.text == "Deposit")
 def ask_amount(message):
     msg = bot.send_message(message.chat.id, "কত টাকা ডিপোজিট করবেন?")
@@ -92,6 +112,7 @@ def finalize_deposit(message):
     bot.send_message(ADMIN_ID, f"🔔 ডিপোজিট! User: @{message.from_user.username}\nAmount: {deposit_requests[uid]['amount']}\nTrx: {message.text}", reply_markup=markup)
     bot.reply_to(message, "✅ রিকোয়েস্ট পাঠানো হয়েছে।")
 
+# --- SELL SYSTEM ---
 @bot.message_handler(func=lambda m: m.text == "Sell")
 def show_sell(message):
     if not sellable_types: bot.send_message(message.chat.id, "❌ কোনো আইটেম বিক্রির উপযোগী নেই।"); return
@@ -118,6 +139,7 @@ def finalize_sell(message):
     bot.send_message(ADMIN_ID, f"🔔 সেল রিকোয়েস্ট: {name}\nUser: @{message.from_user.username}", reply_markup=markup)
     bot.reply_to(message, "✅ পাঠানো হয়েছে।")
 
+# --- SHOP & BUY SYSTEM ---
 @bot.message_handler(func=lambda m: m.text == "Shop")
 def shop(message):
     if not items: bot.send_message(message.chat.id, "❌ শপ খালি।"); return
@@ -138,6 +160,7 @@ def buy_item(call):
     else: bot.send_message(uid, f"✅ কেনা সম্পন্ন: {name}\nকনটেন্ট: {item['text']}")
     bot.answer_callback_query(call.id, "✅ কেনা হয়েছে!")
 
+# --- APPROVAL & DENY LOGIC ---
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
     if call.from_user.id != ADMIN_ID: return
