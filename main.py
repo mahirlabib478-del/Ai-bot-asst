@@ -23,6 +23,11 @@ def run_flask():
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
 # --- HELPERS ---
+def show_main_menu(chat_id):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("Shop", "Balance", "Deposit")
+    bot.send_message(chat_id, "মূল মেনু:", reply_markup=markup)
+
 def get_cancel_markup():
     markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
     markup.add("Cancel")
@@ -57,7 +62,8 @@ def ask_amount(message):
 
 def process_amount(message):
     if message.text == "Cancel":
-        bot.send_message(message.chat.id, "অপারেশন বাতিল করা হয়েছে।", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(message.chat.id, "অপারেশন বাতিল করা হয়েছে।")
+        show_main_menu(message.chat.id)
         return
     if not message.text.isdigit():
         bot.reply_to(message, "দয়া করে সঠিক সংখ্যা লিখুন।", reply_markup=get_cancel_markup())
@@ -77,7 +83,8 @@ def ask_sender_number(call):
 def ask_trx_id(message):
     if message.text == "Cancel":
         if message.chat.id in deposit_requests: del deposit_requests[message.chat.id]
-        bot.send_message(message.chat.id, "বাতিল করা হয়েছে।", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(message.chat.id, "বাতিল করা হয়েছে।")
+        show_main_menu(message.chat.id)
         return
     deposit_requests[message.chat.id]["sender_number"] = message.text
     msg = bot.send_message(message.chat.id, "Transaction ID দিন:")
@@ -86,7 +93,8 @@ def ask_trx_id(message):
 def finalize_deposit(message):
     if message.text == "Cancel":
         if message.chat.id in deposit_requests: del deposit_requests[message.chat.id]
-        bot.send_message(message.chat.id, "বাতিল করা হয়েছে।", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(message.chat.id, "বাতিল করা হয়েছে।")
+        show_main_menu(message.chat.id)
         return
     
     uid = message.chat.id
@@ -99,7 +107,9 @@ def finalize_deposit(message):
     user = message.from_user
     username = f"@{user.username}" if user.username else "No Username"
     bot.send_message(ADMIN_ID, f"🔔 রিকোয়েস্ট!\nইউজার: {username} (ID: {uid})\nনম্বর: {deposit_requests[uid]['sender_number']}\nTrx: {message.text}\nপরিমাণ: {deposit_requests[uid]['amount']}", reply_markup=markup)
-    bot.reply_to(message, "✅ রিকোয়েস্ট অ্যাডমিনের কাছে পাঠানো হয়েছে।", reply_markup=types.ReplyKeyboardRemove())
+    
+    bot.reply_to(message, "✅ রিকোয়েস্ট অ্যাডমিনের কাছে পাঠানো হয়েছে।")
+    show_main_menu(uid) # এখানে বাটন ফিরিয়ে আনা হয়েছে
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(("app_", "deny_")))
 def handle_admin_decision(call):
@@ -126,9 +136,7 @@ def handle_admin_decision(call):
 # --- SHOP & START ---
 @bot.message_handler(commands=['start'])
 def start(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("Shop", "Balance", "Deposit")
-    bot.send_message(message.chat.id, "স্বাগতম!", reply_markup=markup)
+    show_main_menu(message.chat.id)
 
 @bot.message_handler(func=lambda m: m.text == "Balance")
 def check_balance(message):
@@ -137,6 +145,9 @@ def check_balance(message):
 
 @bot.message_handler(func=lambda m: m.text == "Shop")
 def shop(message):
+    if not items:
+        bot.send_message(message.chat.id, "❌ বর্তমানে কোনো আইটেম নেই।")
+        return
     markup = types.InlineKeyboardMarkup()
     for name, data in items.items():
         markup.add(types.InlineKeyboardButton(f"{name} ({data['price']} BDT) - স্টক: {data['stock']}", callback_data=f"buy_{name}"))
@@ -155,7 +166,7 @@ def buy_item(call):
         return
     user_balances[uid] -= item['price']
     item['stock'] -= 1
-    bot.send_message(uid, f"✅ কেনা সফল!\nপণ্য: {name}\nকনটেন্ট: {item['text']}")
+    bot.send_message(uid, f"✅ কেনা সফল!\n\nপণ্য: {name}\nকনটেন্ট:\n{item['text']}")
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
