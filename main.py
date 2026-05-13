@@ -380,4 +380,15 @@ def admin_reply(call):
     bot.register_next_step_handler(msg, lambda m: bot.send_message(uid, f"🛡 অ্যাডমিন থেকে রিপ্লাই:\n\n{m.text}"))
 if __name__ == "__main__": 
     threading.Thread(target=run_flask).start()
-    bot.infinity_polling()
+    
+    # বট চালু হওয়ার সাথে সাথে ডাটা চেক করবে/পাঠাবে
+    save_data() 
+    
+    # পোলিং স্টার্ট
+    while True:
+        try:
+            bot.polling(none_stop=True)
+        except Exception as e:
+            print(f"Polling error: {e}")
+            import time
+            time.sleep(5)
