@@ -19,9 +19,21 @@ bot = telebot.TeleBot(TOKEN)
 last_message_id = None
 
 def load_data():
-    # সরাসরি খালি ডিকশনারি থেকে শুরু করুন যাতে এরর না হয়
+    # যদি ডাটা চ্যানেল থেকে নিতে সমস্যা হয়, তাহলে ফাইল ব্যবহার করুন
+    if os.path.exists("data.json"):
+        with open("data.json", "r") as f:
+            return json.load(f)
     return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
 
+# এবং save_data ফাংশনে ডাটা চ্যানেলে পাঠানোর পাশাপাশি ফাইলে সেভ করুন:
+def save_data():
+    data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
+    # ফাইলে সেভ
+    with open("data.json", "w") as f:
+        json.dump(data, f)
+    
+    # চ্যানেলে এডিট (আগের দেওয়া লজিক অনুযায়ী)
+    # ... (আপনার চ্যানেলে ডাটা সেভ করার কোড)
 save_lock = threading.Lock()
 def save_data():
     global last_message_id
@@ -29,16 +41,17 @@ def save_data():
         data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
         data_str = json.dumps(data)
         try:
-            # আগে আগের মেসেজ ডিলিট করুন (যদি থাকে)
             if last_message_id:
                 try:
-                    bot.delete_message(CHANNEL_ID, last_message_id)
+                    # মেসেজ ডিলিট না করে এডিট করুন
+                    bot.edit_message_text(data_str, CHANNEL_ID, last_message_id)
                 except:
-                    pass
-            
-            # নতুন মেসেজ পাঠান এবং নতুন আইডিটি সেভ করে রাখুন
-            msg = bot.send_message(CHANNEL_ID, data_str)
-            last_message_id = msg.message_id
+                    # যদি মেসেজ ডিলিট হয়ে যায় বা এডিট না হয়, তবে নতুন করে পাঠান
+                    msg = bot.send_message(CHANNEL_ID, data_str)
+                    last_message_id = msg.message_id
+            else:
+                msg = bot.send_message(CHANNEL_ID, data_str)
+                last_message_id = msg.message_id
         except Exception as e:
             print(f"Save Error: {e}")
             
