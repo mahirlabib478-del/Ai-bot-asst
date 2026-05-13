@@ -21,6 +21,7 @@ deposit_requests = {}
 withdraw_requests = {} 
 pending_sells = {} 
 deposit_number = "01339871504"
+users_db = {} # ইউজার লিস্ট রাখার জন্য
 
 # --- FLASK (Keep-Alive) ---
 
