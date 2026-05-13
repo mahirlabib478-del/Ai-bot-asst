@@ -390,36 +390,38 @@ def admin_reply(call):
     msg = bot.send_message(ADMIN_ID, "ইউজারকে কী রিপ্লাই দিবেন?")
     bot.register_next_step_handler(msg, lambda m: bot.send_message(uid, f"🛡 অ্যাডমিন থেকে রিপ্লাই:\n\n{m.text}"))
     # ডাটা এক্সপোর্ট করার কমান্ড (ব্যাকআপ নেওয়ার জন্য)
-@bot.message_handler(commands=['backup'])
-def backup_data(message):
-    if message.chat.id != ADMIN_ID: return
-    data = {
-        "items": items,
-        "sellable": sellable_types,
-        "balances": user_balances,
-        "users": users_db
-    }
-    # ডাটা একটি টেক্সট হিসেবে রিপ্লাইতে পাঠাবে
-    bot.reply_to(message, f"```json\n{json.dumps(data)}\n```", parse_mode="Markdown")
-
-# ডাটা ইমপোর্ট করার কমান্ড (রিস্টোর করার জন্য)
 @bot.message_handler(commands=['restore'])
 def restore_data(message):
     if message.chat.id != ADMIN_ID: return
     try:
-        # মেসেজ থেকে জেএসএন অংশটুকু আলাদা করা
-        json_data = message.text.replace("/restore ", "")
-        new_data = json.loads(json_data)
+        # ডাটা সংগ্রহ করা (টেক্সট বা ফাইল থেকে)
+        if message.reply_to_message and message.reply_to_message.document:
+            file_info = bot.get_file(message.reply_to_message.document.file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            new_data = json.loads(downloaded_file.decode('utf-8'))
+        else:
+            json_data = message.text.replace("/restore ", "")
+            new_data = json.loads(json_data)
         
-        # গ্লোবাল ভেরিয়েবলগুলো আপডেট করা
+        # গ্লোবাল ভেরিয়েবলগুলো স্পষ্টভাবে আপডেট করা
         global items, sellable_types, user_balances, users_db
-        items.update(new_data["items"])
-        sellable_types.update(new_data["sellable"])
-        user_balances.update(new_data["balances"])
-        users_db.update(new_data["users"])
         
-        save_data() # সেভ করা
-        bot.reply_to(message, "✅ ডাটা সফলভাবে রিস্টোর হয়েছে!")
+        items.clear()
+        items.update(new_data.get("items", {}))
+        
+        sellable_types.clear()
+        sellable_types.update(new_data.get("sellable", {}))
+        
+        user_balances.clear()
+        user_balances.update(new_data.get("balances", {}))
+        
+        users_db.clear()
+        users_db.update(new_data.get("users", {}))
+        
+        # সবশেষে সেভ করুন যাতে চ্যানেলেও নতুন ডাটা আপডেট হয়
+        save_data()
+        
+        bot.reply_to(message, f"✅ ডাটা সফলভাবে রিস্টোর হয়েছে!\nব্যালেন্স রিস্টোর হয়েছে: {len(user_balances)} জন ইউজারের।")
     except Exception as e:
         bot.reply_to(message, f"❌ এরর: {e}")
 if __name__ == "__main__": 
