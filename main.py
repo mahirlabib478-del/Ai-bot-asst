@@ -30,8 +30,9 @@ def save_data():
         data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
         data_str = json.dumps(data)
         try:
-            # get_chat_history এর বদলে সরাসরি মেসেজ পাঠান। 
-            # আগের মেসেজ এডিট করতে চাইলে মেসেজ আইডি লাগবে।
+            # আগে আগের মেসেজ খুঁজে ডিলিট করার দরকার নেই, 
+            # আমরা শুধু সর্বশেষ মেসেজের আইডিটা জানলে এডিট করতে পারি।
+            # আপাতত জঞ্জাল এড়াতে শুধু মেসেজ পাঠাচ্ছি
             bot.send_message(CHANNEL_ID, data_str)
         except Exception as e:
             print(f"Save Error: {e}")
