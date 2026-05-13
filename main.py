@@ -25,17 +25,19 @@ def load_data():
     return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
 
 # ডাটা সেভ করার ফাংশন
+# ডাটা সেভ করার ফাংশন (আপডেট করা হয়েছে)
 def save_data():
     data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
     try:
-        # চ্যানেলের সর্বশেষ মেসেজটি ডিলিট করে নতুনটা দেওয়া
         messages = bot.get_chat_history(CHANNEL_ID, limit=1)
         if messages:
-            bot.delete_message(CHANNEL_ID, messages[0].message_id)
-        bot.send_message(CHANNEL_ID, json.dumps(data))
+            # মেসেজ ডিলিট না করে এডিট করুন
+            bot.edit_message_text(json.dumps(data), CHANNEL_ID, messages[0].message_id)
+        else:
+            # মেসেজ না থাকলে নতুন করে পাঠান
+            bot.send_message(CHANNEL_ID, json.dumps(data))
     except Exception as e:
         print(f"Error saving data: {e}")
-
 
 app = Flask(__name__)
 
