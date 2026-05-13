@@ -9,19 +9,47 @@ from telebot import types
 TOKEN = "8786283279:AAHvKKt4pnL_JXMvru4TRwDn-1cGxWBqv2g" 
 ADMIN_ID = 8538304896
 
+import json
+# আপনার প্রাইভেট চ্যানেলের আইডি এখানে দিন
+CHANNEL_ID = -1003660295348 
+
 bot = telebot.TeleBot(TOKEN) 
+# ডাটা লোড করার ফাংশন
+def load_data():
+    try:
+        messages = bot.get_chat_history(CHANNEL_ID, limit=1)
+        if messages:
+            data = json.loads(messages[0].text)
+            return data
+    except: pass
+    return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
+
+# ডাটা সেভ করার ফাংশন
+def save_data():
+    data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
+    try:
+        # চ্যানেলের সর্বশেষ মেসেজটি ডিলিট করে নতুনটা দেওয়া
+        messages = bot.get_chat_history(CHANNEL_ID, limit=1)
+        if messages:
+            bot.delete_message(CHANNEL_ID, messages[0].message_id)
+        bot.send_message(CHANNEL_ID, json.dumps(data))
+    except Exception as e:
+        print(f"Error saving data: {e}")
+
+
 app = Flask(__name__)
 
 # --- DATA STORAGE ---
+saved_data = load_data() 
+items = saved_data.get("items", {})
+sellable_types = saved_data.get("sellable", {})
+user_balances = saved_data.get("balances", {})
+users_db = saved_data.get("users", {})
 
-items = {} 
-sellable_types = {} 
-user_balances = {} 
 deposit_requests = {}
 withdraw_requests = {} 
 pending_sells = {} 
 deposit_number = "01339871504"
-users_db = {} # ইউজার লিস্ট রাখার জন্য
 
 # --- FLASK (Keep-Alive) ---
 
@@ -51,6 +79,7 @@ def add_sellable(message):
     try: 
         data = message.text.replace("/addsellable ", "").split("|") 
         sellable_types[data[0]] = {"price": int(data[1])} 
+        save_data()
         bot.reply_to(message, f"✅ '{data[0]}' সেলে যোগ হয়েছে। দাম: {data[1]} BDT") 
     except: 
         bot.reply_to(message, "⚠️ ফরম্যাট: /addsellable Name|Price")
@@ -69,6 +98,7 @@ def add_item_admin(message):
         f_type = 'photo' if msg.photo else 'video' if msg.video else 'document' if msg.document else 'text' 
         text = msg.caption or msg.text or "No content" 
         items[name] = {"price": price, "stock": stock, "f_id": f_id, "type": f_type, "text": text} 
+        save_data()
         bot.reply_to(message, f"✅ '{name}' {stock} স্টক সহ শপে যোগ হয়েছে।") 
     except Exception as e: 
         bot.reply_to(message, f"❌ ফরম্যাট ভুল! ব্যবহার করুন: /additem Name|Price|Stock\nError: {e}")
@@ -81,6 +111,7 @@ def set_stock_admin(message):
         name, new_stock = data[0], int(data[1]) 
         if name in items: 
             items[name]['stock'] = new_stock 
+            save_data()
             bot.reply_to(message, f"✅ '{name}' এর নতুন স্টক: {new_stock}") 
         else: 
             bot.reply_to(message, "❌ এই আইটেমটি শপে নেই।") 
@@ -113,9 +144,11 @@ def handle_remove(call):
         name = "_".join(parts[2:]) 
         if mode == "shop" and name in items: 
             del items[name]
+            save_data()
             bot.edit_message_text(f"✅ Shop থেকে '{name}' মুছে ফেলা হয়েছে।", call.message.chat.id, call.message.message_id)
         elif mode == "sell" and name in sellable_types: 
             del sellable_types[name]
+            save_data()
             bot.edit_message_text(f"✅ Sellable থেকে '{name}' মুছে ফেলা হয়েছে।", call.message.chat.id, call.message.message_id)
         else:
             bot.answer_callback_query(call.id, "❌ আইটেমটি পাওয়া যায়নি।")
@@ -140,6 +173,7 @@ def buy_item(call):
     if item['stock'] <= 0: bot.answer_callback_query(call.id, "❌ স্টক শেষ!"); return
     user_balances[uid] -= item['price']
     item['stock'] -= 1
+    save_data()
     if item['type'] == 'photo': bot.send_photo(uid, item['f_id'], caption=f"✅ কেনা সম্পন্ন: {name}")
     elif item['type'] == 'video': bot.send_video(uid, item['f_id'], caption=f"✅ কেনা সম্পন্ন: {name}")
     elif item['type'] == 'document': bot.send_document(uid, item['f_id'], caption=f"✅ কেনা সম্পন্ন: {name}")
@@ -197,6 +231,7 @@ def handle_sell_approval(call):
         price = sellable_types[name]['price'] 
         items[f"{name}{uid}"] = {"price": price, "stock": qty, "f_id": data["f_id"], "type": data["type"], "text": data["text"]}
         user_balances[uid] = user_balances.get(uid, 0) + (price * qty)
+        save_data()
         bot.send_message(uid, f"✅ আপনার সেল রিকোয়েস্ট এপ্রুভ হয়েছে!")
         bot.edit_message_text(f"✅ এপ্রুভড! ইউজার: @{data['username']}", call.message.chat.id, call.message.message_id)
     else: 
@@ -207,6 +242,7 @@ def handle_sell_approval(call):
 @bot.message_handler(commands=['start']) 
 def start(message): 
     users_db[message.chat.id] = message.from_user.username or "NoUsername"
+    save_data()
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True); 
     markup.add("Shop", "Sell", "Balance", "Deposit", "Withdraw", "Contact Admin") 
     bot.send_message(message.chat.id, "Shop v1.0 বটে আপনাকে স্বাগতম", reply_markup=markup)
@@ -238,6 +274,7 @@ def callback_handler(call):
     action, uid = call.data.split("_") 
     if action == "app": 
         user_balances[int(uid)] = user_balances.get(int(uid), 0) + int(deposit_requests[int(uid)]['amount'])
+        save_data()
         bot.send_message(int(uid), "✅ এপ্রুভ হয়েছে!"); del deposit_requests[int(uid)]
     else: 
         bot.send_message(int(uid), "❌ রিজেক্ট হয়েছে!"); del deposit_requests[int(uid)] 
@@ -282,6 +319,7 @@ def handle_withdraw_approval(call):
     if action == "appw":
         amount = withdraw_requests[uid]['amount']
         user_balances[uid] -= amount
+        save_data()
         bot.send_message(uid, f"✅ আপনার {amount} BDT উইথড্র রিকোয়েস্ট এপ্রুভ হয়েছে!")
         bot.edit_message_text(f"✅ এপ্রুভড! ইউজার: {uid}", call.message.chat.id, call.message.message_id)
     else:
