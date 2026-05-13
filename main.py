@@ -18,9 +18,9 @@ bot = telebot.TeleBot(TOKEN)
 # ডাটা লোড করার ফাংশন (পরিবর্তিত)
 last_message_id = None
 
+# --- আগের কোডের অংশ ---
 def load_data():
     try:
-        # পিন করা মেসেজ থেকে ডাটা লোড করা (সবচেয়ে নিরাপদ)
         chat = bot.get_chat(CHANNEL_ID)
         if chat.pinned_message:
             data = json.loads(chat.pinned_message.text)
@@ -29,10 +29,28 @@ def load_data():
             return data
     except Exception as e:
         print(f"Load Error (No pinned message or empty): {e}")
-    
-    # ডাটা না থাকলে নতুন ডিকশনারি রিটার্ন করবে
     return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
+
+# --- এখান থেকে নতুনটি বসান ---
+save_lock = threading.Lock()
+def save_data():
+    global last_message_id
+    with save_lock:
+        data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
+        data_str = json.dumps(data)
+        try:
+            if last_message_id:
+                try:
+                    bot.unpin_chat_message(CHANNEL_ID, last_message_id)
+                    bot.delete_message(CHANNEL_ID, last_message_id)
+                except: pass
             
+            msg = bot.send_message(CHANNEL_ID, data_str)
+            last_message_id = msg.message_id
+            bot.pin_chat_message(CHANNEL_ID, last_message_id)
+        except Exception as e:
+            print(f"Save Error: {e}")
+# এরপর আপনার বাকি কোডগুলো থাকবে...
 app = Flask(__name__)
 
 # --- DATA STORAGE ---
