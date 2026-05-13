@@ -16,36 +16,36 @@ CHANNEL_ID = -1003903695158
 
 bot = telebot.TeleBot(TOKEN) 
 # ডাটা লোড করার ফাংশন (পরিবর্তিত)
+last_message_id = None
+
 def load_data():
-    try:
-        # গ্রুপ বা চ্যানেলের শেষ ৫টি মেসেজ চেক করবে
-        messages = bot.get_chat_history(CHANNEL_ID, limit=5)
-        for msg in reversed(messages):
-            if msg.text and ("balances" in msg.text or "items" in msg.text):
-                return json.loads(msg.text)
-    except Exception as e:
-        print(f"Load Error: {e}")
+    # সরাসরি খালি ডিকশনারি থেকে শুরু করুন যাতে এরর না হয়
     return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
 
 save_lock = threading.Lock()
 def save_data():
+    global last_message_id
     with save_lock:
         data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
         data_str = json.dumps(data)
         try:
-            # আগে সর্বশেষ মেসেজটি ডিলিট করার চেষ্টা করবে
-            messages = bot.get_chat_history(CHANNEL_ID, limit=1)
-            if messages:
-                bot.delete_message(CHANNEL_ID, messages[0].message_id)
+            # আগে আগের মেসেজ ডিলিট করুন (যদি থাকে)
+            if last_message_id:
+                try:
+                    bot.delete_message(CHANNEL_ID, last_message_id)
+                except:
+                    pass
             
-            # নতুন ডাটা পাঠাবে
-            bot.send_message(CHANNEL_ID, data_str)
+            # নতুন মেসেজ পাঠান এবং নতুন আইডিটি সেভ করে রাখুন
+            msg = bot.send_message(CHANNEL_ID, data_str)
+            last_message_id = msg.message_id
         except Exception as e:
             print(f"Save Error: {e}")
             
 app = Flask(__name__)
 
 # --- DATA STORAGE ---
+# ডাটা লোড করা
 saved_data = load_data()
 items = saved_data.get("items", {})
 sellable_types = saved_data.get("sellable", {})
