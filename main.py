@@ -12,7 +12,7 @@ ADMIN_ID = 8538304896
 
 import json
 # আপনার প্রাইভেট চ্যানেলের আইডি এখানে দিন
-CHANNEL_ID = "@storeage009"
+CHANNEL_ID = -1003903695158
 
 bot = telebot.TeleBot(TOKEN) 
 # # ডাটা লোড করার ফাংশন
