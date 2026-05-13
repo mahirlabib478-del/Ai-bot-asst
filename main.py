@@ -288,7 +288,50 @@ def handle_withdraw_approval(call):
         bot.send_message(uid, "❌ আপনার উইথড্র রিকোয়েস্টটি রিজেক্ট করা হয়েছে।")
         bot.edit_message_text(f"❌ ডেনিড! ইউজার: {uid}", call.message.chat.id, call.message.message_id)
     if uid in withdraw_requests: del withdraw_requests[uid]
+# --- ADMIN PANEL & BROADCAST ---
+@bot.message_handler(commands=['admin'])
+def admin_panel(message):
+    if message.chat.id != ADMIN_ID: return
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("Broadcast", callback_data="admin_broadcast"),
+               types.InlineKeyboardButton("View Users", callback_data="admin_view_users"))
+    bot.send_message(message.chat.id, "Admin Panel:", reply_markup=markup)
 
+@bot.callback_query_handler(func=lambda call: call.data in["admin_broadcast", "admin_view_users"])
+def handle_admin_panel(call):
+    if call.from_user.id != ADMIN_ID: return
+    if call.data == "admin_broadcast":
+        msg = bot.send_message(call.message.chat.id, "সবার কাছে পাঠানোর মেসেজটি লিখুন:")
+        bot.register_next_step_handler(msg, perform_broadcast)
+    elif call.data == "admin_view_users":
+        text = "👥 ইউজার লিস্ট:\n\n"
+        for uid, uname in users_db.items():
+            text += f"ID: {uid} | Username: @{uname}\n"
+        bot.send_message(call.message.chat.id, text)
+
+def perform_broadcast(message):
+    for uid in users_db:
+        try: bot.send_message(uid, f"📢 অ্যাডমিন বার্তা:\n\n{message.text}")
+        except: continue
+    bot.reply_to(message, "✅ সবার কাছে মেসেজ পাঠানো হয়েছে।")
+
+# --- CONTACT ADMIN & REPLY ---
+@bot.message_handler(func=lambda m: m.text == "Contact Admin")
+def contact_admin(message):
+    msg = bot.send_message(message.chat.id, "আপনার মেসেজটি লিখুন, অ্যাডমিন রিপ্লাই দিবে:")
+    bot.register_next_step_handler(msg, forward_to_admin)
+
+def forward_to_admin(message):
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("Reply", callback_data=f"reply_{message.chat.id}"))
+    bot.send_message(ADMIN_ID, f"📩 নতুন মেসেজ:\n\nUser: @{message.from_user.username}\nID: {message.chat.id}\n\nMsg: {message.text}", reply_markup=markup)
+    bot.reply_to(message, "✅ মেসেজটি অ্যাডমিনের কাছে পাঠানো হয়েছে।")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("reply_"))
+def admin_reply(call):
+    uid = call.data.split("_")[1]
+    msg = bot.send_message(ADMIN_ID, "ইউজারকে কী রিপ্লাই দিবেন?")
+    bot.register_next_step_handler(msg, lambda m: bot.send_message(uid, f"🛡 অ্যাডমিন থেকে রিপ্লাই:\n\n{m.text}"))
 if __name__ == "__main__": 
     threading.Thread(target=run_flask).start()
     bot.infinity_polling()
