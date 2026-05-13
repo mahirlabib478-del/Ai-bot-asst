@@ -20,23 +20,17 @@ last_message_id = None
 
 def load_data():
     try:
-        # বিকল্প পদ্ধতি: আমরা লাইব্রেরির সরাসরি মেথড ব্যবহার করব
-        # অথবা আপনার চ্যানেলে পিন করা মেসেজ থেকে ডাটা নিতে পারেন, যা অনেক বেশি স্থায়ী।
+        # পিন করা মেসেজ থেকে ডাটা লোড করা (সবচেয়ে নিরাপদ)
         chat = bot.get_chat(CHANNEL_ID)
-        # যদি আপনি সর্বশেষ মেসেজটিই পেতে চান, তবে নিচে দেখুন:
-        # যেহেতু সরাসরি get_chat_history অনেক ভার্সনে সাপোর্ট করে না, 
-        # তাই সহজ সমাধান হলো একটি নির্দিষ্ট পিন করা মেসেজ থেকে ডাটা নেওয়া:
-        
-        # যদি আপনার চ্যানেলে ডাটা মেসেজটি পিন করা থাকে:
-        pinned_msg = bot.get_chat(CHANNEL_ID).pinned_message
-        if pinned_msg:
-            data = json.loads(pinned_msg.text)
+        if chat.pinned_message:
+            data = json.loads(chat.pinned_message.text)
             global last_message_id
-            last_message_id = pinned_msg.message_id
+            last_message_id = chat.pinned_message.message_id
             return data
     except Exception as e:
-        print(f"Load Error: {e}")
+        print(f"Load Error (No pinned message or empty): {e}")
     
+    # ডাটা না থাকলে নতুন ডিকশনারি রিটার্ন করবে
     return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
             
 app = Flask(__name__)
@@ -376,8 +370,12 @@ def admin_reply(call):
 if __name__ == "__main__": 
     threading.Thread(target=run_flask).start()
     
-    # বট চালু হওয়ার সাথে সাথে ডাটা চেক করবে/পাঠাবে
-    save_data() 
+    # বট চালু হওয়ার সময় ডাটা লোড করা
+    saved_data = load_data()
+    items = saved_data.get("items", {})
+    sellable_types = saved_data.get("sellable", {})
+    user_balances = saved_data.get("balances", {})
+    users_db = saved_data.get("users", {})
     
     # পোলিং স্টার্ট
     while True:
