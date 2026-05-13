@@ -29,16 +29,18 @@ def load_data():
 def save_data():
     data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
     try:
+        # history খুঁজে দেখি
         messages = bot.get_chat_history(CHANNEL_ID, limit=1)
+        
         if messages:
-            # মেসেজ ডিলিট না করে এডিট করুন
+            # মেসেজ থাকলে এডিট
             bot.edit_message_text(json.dumps(data), CHANNEL_ID, messages[0].message_id)
         else:
-            # মেসেজ না থাকলে নতুন করে পাঠান
+            # না থাকলে নতুন করে পাঠানো (এটি শুধু প্রথমবার হবে)
             bot.send_message(CHANNEL_ID, json.dumps(data))
     except Exception as e:
         print(f"Error saving data: {e}")
-
+        
 app = Flask(__name__)
 
 # --- DATA STORAGE ---
