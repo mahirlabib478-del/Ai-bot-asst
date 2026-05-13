@@ -20,22 +20,23 @@ last_message_id = None
 
 def load_data():
     try:
-        # চ্যানেলের সর্বশেষ হিস্ট্রি চেক করা
-        messages = bot.get_chat_history(CHANNEL_ID, limit=1)
-        if messages:
-            last_msg = messages[0]
-            # মেসেজের টেক্সট থেকে ডাটা পার্স করা
-            data = json.loads(last_msg.text)
-            
-            # গ্লোবাল ভেরিয়েবল হিসেবে মেসেজ আইডি সেট করা যাতে পরের বার ডিলিট করা যায়
+        # বিকল্প পদ্ধতি: আমরা লাইব্রেরির সরাসরি মেথড ব্যবহার করব
+        # অথবা আপনার চ্যানেলে পিন করা মেসেজ থেকে ডাটা নিতে পারেন, যা অনেক বেশি স্থায়ী।
+        chat = bot.get_chat(CHANNEL_ID)
+        # যদি আপনি সর্বশেষ মেসেজটিই পেতে চান, তবে নিচে দেখুন:
+        # যেহেতু সরাসরি get_chat_history অনেক ভার্সনে সাপোর্ট করে না, 
+        # তাই সহজ সমাধান হলো একটি নির্দিষ্ট পিন করা মেসেজ থেকে ডাটা নেওয়া:
+        
+        # যদি আপনার চ্যানেলে ডাটা মেসেজটি পিন করা থাকে:
+        pinned_msg = bot.get_chat(CHANNEL_ID).pinned_message
+        if pinned_msg:
+            data = json.loads(pinned_msg.text)
             global last_message_id
-            last_message_id = last_msg.message_id
-            
+            last_message_id = pinned_msg.message_id
             return data
     except Exception as e:
         print(f"Load Error: {e}")
     
-    # যদি ডাটা না পাওয়া যায়, তবে খালি ডাটা রিটার্ন করবে
     return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
             
 app = Flask(__name__)
