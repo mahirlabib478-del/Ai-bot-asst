@@ -18,20 +18,10 @@ bot = telebot.TeleBot(TOKEN)
 # ডাটা লোড করার ফাংশন (পরিবর্তিত)
 last_message_id = None
 
-# --- আগের কোডের অংশ ---
 def load_data():
-    try:
-        chat = bot.get_chat(CHANNEL_ID)
-        if chat.pinned_message:
-            data = json.loads(chat.pinned_message.text)
-            global last_message_id
-            last_message_id = chat.pinned_message.message_id
-            return data
-    except Exception as e:
-        print(f"Load Error (No pinned message or empty): {e}")
+    # সরাসরি খালি ডিকশনারি থেকে শুরু করুন যাতে এরর না হয়
     return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
 
-# --- এখান থেকে নতুনটি বসান ---
 save_lock = threading.Lock()
 def save_data():
     global last_message_id
@@ -39,18 +29,19 @@ def save_data():
         data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
         data_str = json.dumps(data)
         try:
+            # আগে আগের মেসেজ ডিলিট করুন (যদি থাকে)
             if last_message_id:
                 try:
-                    bot.unpin_chat_message(CHANNEL_ID, last_message_id)
                     bot.delete_message(CHANNEL_ID, last_message_id)
-                except: pass
+                except:
+                    pass
             
+            # নতুন মেসেজ পাঠান এবং নতুন আইডিটি সেভ করে রাখুন
             msg = bot.send_message(CHANNEL_ID, data_str)
             last_message_id = msg.message_id
-            bot.pin_chat_message(CHANNEL_ID, last_message_id)
         except Exception as e:
             print(f"Save Error: {e}")
-# এরপর আপনার বাকি কোডগুলো থাকবে...
+            
 app = Flask(__name__)
 
 # --- DATA STORAGE ---
@@ -388,12 +379,8 @@ def admin_reply(call):
 if __name__ == "__main__": 
     threading.Thread(target=run_flask).start()
     
-    # বট চালু হওয়ার সময় ডাটা লোড করা
-    saved_data = load_data()
-    items = saved_data.get("items", {})
-    sellable_types = saved_data.get("sellable", {})
-    user_balances = saved_data.get("balances", {})
-    users_db = saved_data.get("users", {})
+    # বট চালু হওয়ার সাথে সাথে ডাটা চেক করবে/পাঠাবে
+    save_data() 
     
     # পোলিং স্টার্ট
     while True:
@@ -403,3 +390,4 @@ if __name__ == "__main__":
             print(f"Polling error: {e}")
             import time
             time.sleep(5)
+                  
