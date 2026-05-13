@@ -17,22 +17,28 @@ CHANNEL_ID = -1003903695158
 bot = telebot.TeleBot(TOKEN) 
 # ডাটা লোড করার ফাংশন (পরিবর্তিত)
 def load_data():
-    # সরাসরি হিস্ট্রি না নিয়ে, আপনি যদি বটকে দিয়ে একটি ফিক্সড মেসেজ আইডি থেকে ডাটা রিড করতে চান
-    # তবে pyTelegramBotAPI-তে এটি জটিল। সহজ উপায় হলো:
-    # ডাটা চ্যানেলে মেসেজ হিসেবেই থাকবে, কিন্তু আমরা সরাসরি রিড করবো না।
-    # আপাতত আমরা বট রিস্টার্ট হলে খালি ডাটা দিয়ে শুরু করবো।
+    try:
+        # গ্রুপ বা চ্যানেলের শেষ ৫টি মেসেজ চেক করবে
+        messages = bot.get_chat_history(CHANNEL_ID, limit=5)
+        for msg in reversed(messages):
+            if msg.text and ("balances" in msg.text or "items" in msg.text):
+                return json.loads(msg.text)
+    except Exception as e:
+        print(f"Load Error: {e}")
     return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
 
-# ডাটা সেভ করার ফাংশন (পরিবর্তিত)
 save_lock = threading.Lock()
 def save_data():
     with save_lock:
         data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
         data_str = json.dumps(data)
         try:
-            # আগে আগের মেসেজ খুঁজে ডিলিট করার দরকার নেই, 
-            # আমরা শুধু সর্বশেষ মেসেজের আইডিটা জানলে এডিট করতে পারি।
-            # আপাতত জঞ্জাল এড়াতে শুধু মেসেজ পাঠাচ্ছি
+            # আগে সর্বশেষ মেসেজটি ডিলিট করার চেষ্টা করবে
+            messages = bot.get_chat_history(CHANNEL_ID, limit=1)
+            if messages:
+                bot.delete_message(CHANNEL_ID, messages[0].message_id)
+            
+            # নতুন ডাটা পাঠাবে
             bot.send_message(CHANNEL_ID, data_str)
         except Exception as e:
             print(f"Save Error: {e}")
@@ -40,7 +46,7 @@ def save_data():
 app = Flask(__name__)
 
 # --- DATA STORAGE ---
-saved_data = load_data() 
+saved_data = load_data()
 items = saved_data.get("items", {})
 sellable_types = saved_data.get("sellable", {})
 user_balances = saved_data.get("balances", {})
