@@ -15,32 +15,35 @@ import json
 CHANNEL_ID = -1003660295348 
 
 bot = telebot.TeleBot(TOKEN) 
-# ডাটা লোড করার ফাংশন
+# # ডাটা লোড করার ফাংশন
 def load_data():
     try:
+        # মেসেজ হিস্ট্রি থেকে ডাটা নেওয়ার চেষ্টা করা
         messages = bot.get_chat_history(CHANNEL_ID, limit=1)
-        if messages:
-            data = json.loads(messages[0].text)
-            return data
-    except: pass
+        if messages and len(messages) > 0:
+            return json.loads(messages[0].text)
+    except Exception as e:
+        print(f"Load Error: {e}")
+    # যদি চ্যানেলে কোনো মেসেজ না থাকে, তবে একটি প্রাথমিক মেসেজ পাঠিয়ে আইডি সেট করা
+    print("No data found, starting fresh.")
     return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
 
 # ডাটা সেভ করার ফাংশন
-# ডাটা সেভ করার ফাংশন (আপডেট করা হয়েছে)
 save_lock = threading.Lock()
 def save_data():
     with save_lock:
         data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
+        data_str = json.dumps(data)
         try:
             messages = bot.get_chat_history(CHANNEL_ID, limit=1)
-            if messages:
-                # মেসেজটি এডিট করা (নতুন মেসেজ পাঠানোর ঝামেলা নেই)
-                bot.edit_message_text(json.dumps(data), CHANNEL_ID, messages[0].message_id)
+            if messages and len(messages) > 0:
+                # আগের মেসেজ থাকলে তা এডিট করা
+                bot.edit_message_text(data_str, CHANNEL_ID, messages[0].message_id)
             else:
-                # প্রথমবার ডেটা পাঠানোর জন্য
-                bot.send_message(CHANNEL_ID, json.dumps(data))
+                # মেসেজ না থাকলে নতুন করে পাঠানো
+                bot.send_message(CHANNEL_ID, data_str)
         except Exception as e:
-            print(f"Error saving data: {e}")
+            print(f"Save Error: {e}")
             
 app = Flask(__name__)
 
