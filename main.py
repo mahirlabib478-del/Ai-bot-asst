@@ -389,6 +389,39 @@ def admin_reply(call):
     uid = call.data.split("_")[1]
     msg = bot.send_message(ADMIN_ID, "ইউজারকে কী রিপ্লাই দিবেন?")
     bot.register_next_step_handler(msg, lambda m: bot.send_message(uid, f"🛡 অ্যাডমিন থেকে রিপ্লাই:\n\n{m.text}"))
+    # ডাটা এক্সপোর্ট করার কমান্ড (ব্যাকআপ নেওয়ার জন্য)
+@bot.message_handler(commands=['backup'])
+def backup_data(message):
+    if message.chat.id != ADMIN_ID: return
+    data = {
+        "items": items,
+        "sellable": sellable_types,
+        "balances": user_balances,
+        "users": users_db
+    }
+    # ডাটা একটি টেক্সট হিসেবে রিপ্লাইতে পাঠাবে
+    bot.reply_to(message, f"```json\n{json.dumps(data)}\n```", parse_mode="Markdown")
+
+# ডাটা ইমপোর্ট করার কমান্ড (রিস্টোর করার জন্য)
+@bot.message_handler(commands=['restore'])
+def restore_data(message):
+    if message.chat.id != ADMIN_ID: return
+    try:
+        # মেসেজ থেকে জেএসএন অংশটুকু আলাদা করা
+        json_data = message.text.replace("/restore ", "")
+        new_data = json.loads(json_data)
+        
+        # গ্লোবাল ভেরিয়েবলগুলো আপডেট করা
+        global items, sellable_types, user_balances, users_db
+        items.update(new_data["items"])
+        sellable_types.update(new_data["sellable"])
+        user_balances.update(new_data["balances"])
+        users_db.update(new_data["users"])
+        
+        save_data() # সেভ করা
+        bot.reply_to(message, "✅ ডাটা সফলভাবে রিস্টোর হয়েছে!")
+    except Exception as e:
+        bot.reply_to(message, f"❌ এরর: {e}")
 if __name__ == "__main__": 
     threading.Thread(target=run_flask).start()
     
