@@ -19,28 +19,24 @@ bot = telebot.TeleBot(TOKEN)
 last_message_id = None
 
 def load_data():
-    # সরাসরি খালি ডিকশনারি থেকে শুরু করুন যাতে এরর না হয়
-    return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
-
-save_lock = threading.Lock()
-def save_data():
-    global last_message_id
-    with save_lock:
-        data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
-        data_str = json.dumps(data)
-        try:
-            # আগে আগের মেসেজ ডিলিট করুন (যদি থাকে)
-            if last_message_id:
-                try:
-                    bot.delete_message(CHANNEL_ID, last_message_id)
-                except:
-                    pass
+    try:
+        # চ্যানেলের সর্বশেষ হিস্ট্রি চেক করা
+        messages = bot.get_chat_history(CHANNEL_ID, limit=1)
+        if messages:
+            last_msg = messages[0]
+            # মেসেজের টেক্সট থেকে ডাটা পার্স করা
+            data = json.loads(last_msg.text)
             
-            # নতুন মেসেজ পাঠান এবং নতুন আইডিটি সেভ করে রাখুন
-            msg = bot.send_message(CHANNEL_ID, data_str)
-            last_message_id = msg.message_id
-        except Exception as e:
-            print(f"Save Error: {e}")
+            # গ্লোবাল ভেরিয়েবল হিসেবে মেসেজ আইডি সেট করা যাতে পরের বার ডিলিট করা যায়
+            global last_message_id
+            last_message_id = last_msg.message_id
+            
+            return data
+    except Exception as e:
+        print(f"Load Error: {e}")
+    
+    # যদি ডাটা না পাওয়া যায়, তবে খালি ডাটা রিটার্ন করবে
+    return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
             
 app = Flask(__name__)
 
