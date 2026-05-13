@@ -3,6 +3,7 @@ import threading
 from flask import Flask 
 import telebot 
 from telebot import types
+import json
 
 # --- CONFIGURATION ---
 
@@ -26,21 +27,21 @@ def load_data():
 
 # ডাটা সেভ করার ফাংশন
 # ডাটা সেভ করার ফাংশন (আপডেট করা হয়েছে)
+save_lock = threading.Lock()
 def save_data():
-    data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
-    try:
-        # history খুঁজে দেখি
-        messages = bot.get_chat_history(CHANNEL_ID, limit=1)
-        
-        if messages:
-            # মেসেজ থাকলে এডিট
-            bot.edit_message_text(json.dumps(data), CHANNEL_ID, messages[0].message_id)
-        else:
-            # না থাকলে নতুন করে পাঠানো (এটি শুধু প্রথমবার হবে)
-            bot.send_message(CHANNEL_ID, json.dumps(data))
-    except Exception as e:
-        print(f"Error saving data: {e}")
-        
+    with save_lock:
+        data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
+        try:
+            messages = bot.get_chat_history(CHANNEL_ID, limit=1)
+            if messages:
+                # মেসেজটি এডিট করা (নতুন মেসেজ পাঠানোর ঝামেলা নেই)
+                bot.edit_message_text(json.dumps(data), CHANNEL_ID, messages[0].message_id)
+            else:
+                # প্রথমবার ডেটা পাঠানোর জন্য
+                bot.send_message(CHANNEL_ID, json.dumps(data))
+        except Exception as e:
+            print(f"Error saving data: {e}")
+            
 app = Flask(__name__)
 
 # --- DATA STORAGE ---
