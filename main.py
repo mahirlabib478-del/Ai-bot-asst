@@ -209,7 +209,7 @@ def start(message):
     users_db[message.chat.id] = message.from_user.username or "NoUsername"
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True); 
     markup.add("Shop", "Sell", "Balance", "Deposit", "Withdraw", "Contact Admin") 
-    bot.send_message(message.chat.id, "শপ বটে আপনাকে স্বাগতম", reply_markup=markup)
+    bot.send_message(message.chat.id, "Shop bot v1.0 তে আপনাকে স্বাগতম", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.text == "Balance") 
 def bal(message):
