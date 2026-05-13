@@ -15,33 +15,24 @@ import json
 CHANNEL_ID = -1003903695158
 
 bot = telebot.TeleBot(TOKEN) 
-# # ডাটা লোড করার ফাংশন
+# ডাটা লোড করার ফাংশন (পরিবর্তিত)
 def load_data():
-    try:
-        # মেসেজ হিস্ট্রি থেকে ডাটা নেওয়ার চেষ্টা করা
-        messages = bot.get_chat_history(CHANNEL_ID, limit=1)
-        if messages and len(messages) > 0:
-            return json.loads(messages[0].text)
-    except Exception as e:
-        print(f"Load Error: {e}")
-    # যদি চ্যানেলে কোনো মেসেজ না থাকে, তবে একটি প্রাথমিক মেসেজ পাঠিয়ে আইডি সেট করা
-    print("No data found, starting fresh.")
+    # সরাসরি হিস্ট্রি না নিয়ে, আপনি যদি বটকে দিয়ে একটি ফিক্সড মেসেজ আইডি থেকে ডাটা রিড করতে চান
+    # তবে pyTelegramBotAPI-তে এটি জটিল। সহজ উপায় হলো:
+    # ডাটা চ্যানেলে মেসেজ হিসেবেই থাকবে, কিন্তু আমরা সরাসরি রিড করবো না।
+    # আপাতত আমরা বট রিস্টার্ট হলে খালি ডাটা দিয়ে শুরু করবো।
     return {"items": {}, "sellable": {}, "balances": {}, "users": {}}
 
-# ডাটা সেভ করার ফাংশন
+# ডাটা সেভ করার ফাংশন (পরিবর্তিত)
 save_lock = threading.Lock()
 def save_data():
     with save_lock:
         data = {"items": items, "sellable": sellable_types, "balances": user_balances, "users": users_db}
         data_str = json.dumps(data)
         try:
-            messages = bot.get_chat_history(CHANNEL_ID, limit=1)
-            if messages and len(messages) > 0:
-                # আগের মেসেজ থাকলে তা এডিট করা
-                bot.edit_message_text(data_str, CHANNEL_ID, messages[0].message_id)
-            else:
-                # মেসেজ না থাকলে নতুন করে পাঠানো
-                bot.send_message(CHANNEL_ID, data_str)
+            # get_chat_history এর বদলে সরাসরি মেসেজ পাঠান। 
+            # আগের মেসেজ এডিট করতে চাইলে মেসেজ আইডি লাগবে।
+            bot.send_message(CHANNEL_ID, data_str)
         except Exception as e:
             print(f"Save Error: {e}")
             
