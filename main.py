@@ -394,16 +394,9 @@ def admin_reply(call):
 def restore_data(message):
     if message.chat.id != ADMIN_ID: return
     try:
-        # ডাটা সংগ্রহ করা (টেক্সট বা ফাইল থেকে)
-        if message.reply_to_message and message.reply_to_message.document:
-            file_info = bot.get_file(message.reply_to_message.document.file_id)
-            downloaded_file = bot.download_file(file_info.file_path)
-            new_data = json.loads(downloaded_file.decode('utf-8'))
-        else:
-            json_data = message.text.replace("/restore ", "")
-            new_data = json.loads(json_data)
+        json_data = message.text.replace("/restore ", "")
+        new_data = json.loads(json_data)
         
-        # গ্লোবাল ভেরিয়েবলগুলো স্পষ্টভাবে আপডেট করা
         global items, sellable_types, user_balances, users_db
         
         items.clear()
@@ -412,15 +405,16 @@ def restore_data(message):
         sellable_types.clear()
         sellable_types.update(new_data.get("sellable", {}))
         
+        # এখানে আসল পরিবর্তন: ID কে String থেকে Integer এ রূপান্তর করছি
         user_balances.clear()
-        user_balances.update(new_data.get("balances", {}))
-        
+        for uid, bal in new_data.get("balances", {}).items():
+            user_balances[int(uid)] = int(bal)
+            
         users_db.clear()
-        users_db.update(new_data.get("users", {}))
+        for uid, uname in new_data.get("users", {}).items():
+            users_db[int(uid)] = uname
         
-        # সবশেষে সেভ করুন যাতে চ্যানেলেও নতুন ডাটা আপডেট হয়
         save_data()
-        
         bot.reply_to(message, f"✅ ডাটা সফলভাবে রিস্টোর হয়েছে!\nব্যালেন্স রিস্টোর হয়েছে: {len(user_balances)} জন ইউজারের।")
     except Exception as e:
         bot.reply_to(message, f"❌ এরর: {e}")
