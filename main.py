@@ -390,34 +390,131 @@ def admin_reply(call):
     msg = bot.send_message(ADMIN_ID, "ইউজারকে কী রিপ্লাই দিবেন?")
     bot.register_next_step_handler(msg, lambda m: bot.send_message(uid, f"🛡 অ্যাডমিন থেকে রিপ্লাই:\n\n{m.text}"))
     # ডাটা এক্সপোর্ট করার কমান্ড (ব্যাকআপ নেওয়ার জন্য)
+
 @bot.message_handler(commands=['restore'])
 def restore_data(message):
-    if message.chat.id != ADMIN_ID: return
+    if message.chat.id != ADMIN_ID:
+        return
+
     try:
-        json_data = message.text.replace("/restore ", "")
-        new_data = json.loads(json_data)
-        
-        global items, sellable_types, user_balances, users_db
-        
+        # =========================
+        # JSON DATA LOAD
+        # =========================
+        if message.reply_to_message and message.reply_to_message.document:
+
+            file_info = bot.get_file(
+                message.reply_to_message.document.file_id
+            )
+
+            downloaded_file = bot.download_file(
+                file_info.file_path
+            )
+
+            new_data = json.loads(
+                downloaded_file.decode("utf-8")
+            )
+
+        else:
+            json_text = message.text.replace(
+                "/restore", "", 1
+            ).strip()
+
+            if not json_text:
+                bot.reply_to(
+                    message,
+                    "❌ JSON data দিন অথবা backup file reply করুন।"
+                )
+                return
+
+            new_data = json.loads(json_text)
+
+        # =========================
+        # GLOBAL VARIABLES
+        # =========================
+        global items
+        global sellable_types
+        global user_balances
+        global users_db
+
+        # =========================
+        # CLEAR OLD DATA
+        # =========================
         items.clear()
-        items.update(new_data.get("items", {}))
-        
         sellable_types.clear()
-        sellable_types.update(new_data.get("sellable", {}))
-        
-        # এখানে আসল পরিবর্তন: ID কে String থেকে Integer এ রূপান্তর করছি
         user_balances.clear()
-        for uid, bal in new_data.get("balances", {}).items():
-            user_balances[int(uid)] = int(bal)
-            
         users_db.clear()
-        for uid, uname in new_data.get("users", {}).items():
-            users_db[int(uid)] = uname
-        
+
+        # =========================
+        # RESTORE ITEMS
+        # =========================
+        items.update(
+            new_data.get("items", {})
+        )
+
+        # =========================
+        # RESTORE SELLABLE TYPES
+        # =========================
+        sellable_types.update(
+            new_data.get("sellable", {})
+        )
+
+        # =========================
+        # RESTORE BALANCES
+        # FIX STRING KEY ISSUE
+        # =========================
+        restored_balances = {
+            int(k): v
+            for k, v in new_data.get(
+                "balances", {}
+            ).items()
+        }
+
+        user_balances.update(
+            restored_balances
+        )
+
+        # =========================
+        # RESTORE USERS DB
+        # FIX STRING KEY ISSUE
+        # =========================
+        restored_users = {
+            int(k): v
+            for k, v in new_data.get(
+                "users", {}
+            ).items()
+        }
+
+        users_db.update(
+            restored_users
+        )
+
+        # =========================
+        # SAVE DATA
+        # =========================
         save_data()
-        bot.reply_to(message, f"✅ ডাটা সফলভাবে রিস্টোর হয়েছে!\nব্যালেন্স রিস্টোর হয়েছে: {len(user_balances)} জন ইউজারের।")
+
+        # =========================
+        # SUCCESS MESSAGE
+        # =========================
+        bot.reply_to(
+            message,
+            f"✅ ডাটা সফলভাবে রিস্টোর হয়েছে!\n\n"
+            f"📦 আইটেম: {len(items)}\n"
+            f"💰 ব্যালেন্স: {len(user_balances)} জন\n"
+            f"👤 ইউজার: {len(users_db)} জন"
+        )
+
+    except json.JSONDecodeError:
+        bot.reply_to(
+            message,
+            "❌ Invalid JSON data!"
+        )
+
     except Exception as e:
-        bot.reply_to(message, f"❌ এরর: {e}")
+        bot.reply_to(
+            message,
+            f"❌ Error: {e}"
+        )
 if __name__ == "__main__": 
     threading.Thread(target=run_flask).start()
     
