@@ -111,7 +111,7 @@ def add_item_admin(message):
         return 
     try: 
         data = message.text.replace("/additem ", "").split("|") 
-        name, price, stock = data[0], int(data[1]), int(data[2]) 
+        name, price, stock = data[0], float(data[1]), int(data[2]) 
         msg = message.reply_to_message 
         f_id = msg.photo[-1].file_id if msg.photo else msg.video.file_id if msg.video else msg.document.file_id if msg.document else None 
         f_type = 'photo' if msg.photo else 'video' if msg.video else 'document' if msg.document else 'text' 
@@ -319,7 +319,7 @@ def get_withdraw_amount(message):
 def finalize_withdraw(message):
     uid = message.chat.id
     try:
-        amount = int(message.text)
+        amount = float(message.text)
         if amount > user_balances.get(uid, 0):
             bot.reply_to(message, "❌ আপনার ব্যালেন্স কম।")
             return
