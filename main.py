@@ -97,7 +97,7 @@ def add_sellable(message):
     if message.chat.id != ADMIN_ID: return 
     try: 
         data = message.text.replace("/addsellable ", "").split("|") 
-        sellable_types[data[0]] = {"price": int(data[1])} 
+        sellable_types[data[0]] = {"price": float(data[1])} 
         save_data()
         bot.reply_to(message, f"✅ '{data[0]}' সেলে যোগ হয়েছে। দাম: {data[1]} BDT") 
     except: 
