@@ -390,7 +390,34 @@ def admin_reply(call):
     msg = bot.send_message(ADMIN_ID, "ইউজারকে কী রিপ্লাই দিবেন?")
     bot.register_next_step_handler(msg, lambda m: bot.send_message(uid, f"🛡 অ্যাডমিন থেকে রিপ্লাই:\n\n{m.text}"))
     # ডাটা এক্সপোর্ট করার কমান্ড (ব্যাকআপ নেওয়ার জন্য)
+# ===== BACKUP COMMAND =====
 
+@bot.message_handler(commands=['backup'])
+def backup_data(message):
+    if message.chat.id != ADMIN_ID:
+        return
+
+    try:
+        data = {
+            "items": items,
+            "sellable": sellable_types,
+            "balances": user_balances,
+            "users": users_db
+        }
+
+        with open("backup.json", "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+
+        with open("backup.json", "rb") as f:
+            bot.send_document(
+                message.chat.id,
+                f,
+                caption="✅ Backup File"
+            )
+
+    except Exception as e:
+        bot.reply_to(message, f"❌ Backup Error: {e}")
+        
 @bot.message_handler(commands=['restore'])
 def restore_data(message):
     if message.chat.id != ADMIN_ID:
