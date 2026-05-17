@@ -542,6 +542,26 @@ def restore_data(message):
             message,
             f"❌ Error: {e}"
         )
+@bot.message_handler(commands=['send'])
+def send_to_user(message):
+    if message.chat.id != ADMIN_ID:
+        return
+    try:
+        # ফরম্যাট: /send user_id মেসেজ
+        parts = message.text.split(' ', 2)
+        if len(parts) < 3:
+            bot.reply_to(message, "⚠️ ফরম্যাট: /send <user_id> <message>")
+            return
+        user_id = int(parts[1])
+        msg_text = parts[2]
+        bot.send_message(user_id, msg_text)
+        bot.reply_to(message, f"✅ {user_id} তে মেসেজ পাঠানো হয়েছে।")
+    except ValueError:
+        bot.reply_to(message, "❌ ইউজার আইডি অবশ্যই সংখ্যা হতে হবে।")
+    except Exception as e:
+        bot.reply_to(message, f"❌ মেসেজ পাঠানো যায়নি: {e}")
+
+
 if __name__ == "__main__": 
     threading.Thread(target=run_flask).start()
     
